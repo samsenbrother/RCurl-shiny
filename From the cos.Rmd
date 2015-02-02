@@ -1,0 +1,171 @@
+---
+title: "RCurl_first_test"
+author: "samsen"
+date: "31/01/2015"
+output: html_document
+---
+
+```{r}
+library(RCurl)
+#########模仿最简单的
+url<-"http://cos.name/cn/"
+myHttpheader <- c(
+"User-Agent"="Mozilla/5.0 (Windows; U; Windows NT 5.1; zh-CN; rv:1.9.1.6) ",
+"Accept"="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+"Accept-Language"="en-us",
+"Connection"="keep-alive",
+"Accept-Charset"="GB2312,utf-8;q=0.7,*;q=0.7"
+)
+###运用geturl浏览网页
+temp <- getURL(url,httpheader=myHttpheader)
+###如何查看geturl的头信息？不妨多设定几个参数
+d = debugGatherer()
+temp <- getURL(url,httpheader=myHttpheader,
+debugfunction=d$update,verbose = TRUE)
+
+###此时d中包含了你所要的信息，其中：
+cat(d$value()[3])
+###中为RCurl提交服务器的头信息，而下面为服务器返回的头信息
+cat(d$value()[2])
+```
+
+```{r} 
+####RCurl的Handles
+
+##在RCurl的目前版本中，有170多个(!!!!!!!!!)cURL系统参数可以设置，具体可以用
+names(getCurlOptionsConstants())
+
+######如此众多参数，如果每次都设定，是不是会非常的繁琐？幸好在RCurl中有一个非常强大的功能可以有效的解决这个问题：那就是cRUL handles（当然，cRUL handles的优势不止这一个）。cRUL handles类似于行走江湖的一个百宝箱：根据自己的喜好设好后，每次背箱出发就行了。同时cRUL handles还根据客户端、服务器端参数的设定在动态的变化，随时更新内容。如下便定义了一个最基本的cRUL handles：
+cHandle <- getCurlHandle(httpheader = myHttpheader)
+
+####在getURL中可以如下应用：
+d = debugGatherer()
+temp <- getURL("http://cos.name/", .opts = list(debugfunction=d$update,verbose = TRUE), curl=cHandle)
+####此时，cHandle中的cRUL系统参数debugfunction、verbose均发生及时的更新。
+```
+
+```{r}
+###用RCurl实现直接登录
+##字符串处理
+myPost <- function(x){
+      post <- scan(x,what="character",quiet=TRUE,sep="\n")
+      abcd=strsplit(post,"&")[[1]]
+      abc=gsub("(^.*)(=)(.*$)","\\3",abcd)
+      abcnames=gsub("(^.*)(=)(.*$)","\\1",abcd)
+      names(abc)=abcnames
+      return(abc)
+}
+temp <- postForm("http://cos.name/bbs/login.php?",.params=postinfo,
+
+             .opts=list(cookiefile=""),curl=cHandle,style="post")
+
+```
+
+
+```{r}
+library(RCurl)
+
+#Set your browsing links 
+loginurl = "http://cos.name/cn/wp-login.php"
+dataurl  = "http://cos.name/cn/"
+
+#Set user account data and agent
+pars=list(
+     username="fuermoca",
+     password="20Hv4qsJCv58"
+)
+agent="Mozilla/5.0" #or whatever 
+
+#Set RCurl pars
+curl = getCurlHandle()
+curlSetOpt(cookiejar="cookies.txt",  useragent = agent, followlocation = TRUE, curl=curl)
+#Also if you do not need to read the cookies. 
+#curlSetOpt(  cookiejar="", useragent = agent, followlocation = TRUE, curl=curl)
+
+#Post login form
+html=postForm(loginurl, .params = pars, curl=curl)
+
+#Go wherever you want
+html=getURL(dataurl, curl=curl)
+
+
+
+```
+
+```{r}
+f_weibo_login <- function(name="18767103151", pwd="a1992514"){
+library(RCurl)
+library(digest)
+
+# 对ID的预处理
+name <- gsub('@', '%40', name)
+name <- base64(name)[1]
+
+# 常规的打包，具体没仔细研究
+myH <- c("Host"="login.sina.com.cn",
+"User-Agent"="Mozilla/5.0 (Windows NT 5.1; rv:2.0.1) Gecko/20100101 Firefox/4.0.1",
+"Accept"="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+"Accept-Language"="zh-cn,zh;q=0.5",
+"Accept-Encoding"="gzip, deflate",
+"Accept-Charset"="GB2312,utf-8;q=0.7,*;q=0.7",
+"Keep-Alive"="115",
+"Connection"="keep-alive",
+"Referer"="http://weibo.com/",
+"Content-Type"="application/x-www-form-urlencoded; charset=UTF-8")
+d <- debugGatherer()
+cH <- getCurlHandle(debugfunction=d$update, verbose=T,
+ssl.verifyhost=F, ssl.verifypeer=F, followlocation=T, cookiefile="cc.txt")
+
+# 预登录的页面。这里貌似应该用一些正则匹配的，也没有仔细研究
+preurl <- paste("http://login.sina.com.cn/sso/prelogin.php?entry=miniblog&callback=sinaSSOController.preloginCallBack&su=",
+name, "&client=ssologin.js(v1.3.18)", sep='')
+prelogin <- readLines(preurl, warn=F)
+servertime <- strsplit(prelogin, '\"servertime\":')[[1]][2]
+servertime <- strsplit(servertime, ',\"pcid\"')[[1]][1]
+pcid <- strsplit(prelogin, '\"pcid\":\"')[[1]][2]
+pcid <- strsplit(pcid, '\",\"nonce\"')[[1]][1]
+nonce <- strsplit(prelogin, '\"nonce\":\"')[[1]][2]
+nonce <- strsplit(nonce, '\"}')[[1]][1]
+servertime
+pcid
+nonce
+# 加密的过程
+pwd1 <- digest(pwd, algo='sha1', seria=F)
+pwd2 <- digest(pwd1, algo='sha1', seria=F)
+pwd3 <- digest(paste(pwd2, servertime, nonce, sep=''), algo='sha1', seria=F)
+getCurlInfo(cH)[["cookielist"]]
+pinfo=c(
+"service"="miniblog",
+"client"="ssologin.js(v1.3.18)",
+"entry"="weibo",
+"encoding"="UTF-8",
+"gateway"="1",
+"savestate"="7",
+"from"="",
+"useticket"="1",
+"su"=name,
+"servertime"=servertime,
+"nonce"=nonce,
+"pwencode"="wsse",
+"sp"=pwd3,
+"vsnf"="1",
+"vsnval"="",
+"pcid"=pcid,
+"url"="http://weibo.com/ajaxlogin.php?framelogin=1&callback=parent.sinaSSOController.feedBackUrlCallBack",
+"returntype"="META",
+"ssosimplelogin"="1",
+"setdomain"="1"
+)
+# 登录
+ttt <- postForm("http://login.sina.com.cn/sso/login.php?client=ssologin.js(v1.3.18)",
+httpheader=myH, .params=pinfo, curl=cH, style="post")
+getCurlInfo(cH)[["cookielist"]]
+
+newurl <- strsplit(ttt[1], 'location.replace\\(\'')[[1]][2]
+newurl <- strsplit(newurl, '\'\\);')[[1]][1]
+newurl
+getURL(newurl, curl=cH, .encoding="gbk")
+getCurlInfo(cH)[["cookielist"]]
+return(cH)
+}
+```
